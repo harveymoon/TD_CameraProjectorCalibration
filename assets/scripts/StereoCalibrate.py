@@ -6,6 +6,7 @@ Open Frameworks : Cyril Diagne
 https://github.com/cyrildiagne/ofxCvCameraProjectorCalibration
 
 
+Made by Harvey Moon, Satoru Higa, Michael Walczyk
 
 """
 
@@ -64,17 +65,13 @@ class StereoCalibrate:
 		self.sqWidth = 12
 		self.sqHeight = 8
 
-
 		self.circleWidth = 7
 		self.circleHeight = 6
-
-		
 
 		self.CameraRes = (100,100) # is re-set when first frame is grabbed
 
 		self.dictionary = aruco.getPredefinedDictionary (aruco.DICT_4X4_50) #aruco.DICT_6X6_250) #
 		self.board = cv2.aruco.CharucoBoard_create(self.sqWidth,self.sqHeight,0.035,0.0175, self.dictionary)
-
 
 
 	def SaveBoard(self):
@@ -102,7 +99,6 @@ class StereoCalibrate:
 		parent().store('charucoCornersAccum', [])
 		parent().store('charucoIdsAccum', [] )
 		parent().par.Capturedsets = 0
-
 
 	def CaptureFrame(self):
 		print('capture frame')
