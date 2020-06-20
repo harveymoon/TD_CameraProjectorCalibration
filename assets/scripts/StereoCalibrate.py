@@ -64,6 +64,12 @@ class StereoCalibrate:
 		self.sqWidth = 12
 		self.sqHeight = 8
 
+
+		self.circleWidth = 7
+		self.circleHeight = 6
+
+		
+
 		self.CameraRes = (100,100) # is re-set when first frame is grabbed
 
 		self.dictionary = aruco.getPredefinedDictionary (aruco.DICT_4X4_50) #aruco.DICT_6X6_250) #
@@ -173,4 +179,74 @@ class StereoCalibrate:
 
 	def FindPose(self):
 		print("Find Pose")
+
+
+	def FindCircleGrid(self):
+		ret=parent().fetch('ret')
+		K=parent().fetch('K')
+		dist_coef=parent().fetch('dist_coef')
+		rvecs=parent().fetch('rvecs')
+		tvecs=parent().fetch('tvecs')
+
+		frame = parent().GrabTop()
+
+
+		circleGridScale = (self.circleWidth,self.circleHeight) 
+
+		frame = cv2.bitwise_not(frame) #invert the frame to see the dots
+		# --------- detect circles -----------
+		ret, circles = cv2.findCirclesGrid(frame, circleGridScale, flags=cv2.CALIB_CB_SYMMETRIC_GRID)
+
+		print('ret : ')
+		print(ret)
+		img = cv2.drawChessboardCorners(frame, circleGridScale, circles, ret)
+
+		#getMostRecent rvec 
+		rvec = rvecs[len(rvecs)-1]
+		tvec = tvecs[len(tvecs)-1]
+
+		print('circles found : ')
+		print(circles)
+
+		# print(type(circles))
+		# print(type(circles[0]))
+
+
+		print('Matrix K : ')
+		print(K)
+
+		#print('dist_coef : ')
+		#print(dist_coef)
+
+
+		cv2.undistortPoints(circles, K, dist_coef)
+
+		# ray-plane intersection: circle-center to chessboard-plane
+		circles3D = intersectCirclesRaysToBoard(circles, rvec, tvec, K, dist_coef)
+		 
+		# re-project on camera for verification
+		circles3D_reprojected, _ = cv2.projectPoints(circles3D, (0,0,0), (0,0,0), K, dist_coef)
+		for c in circles3D_reprojected:
+		    cv2.circle(frame, tuple(c.astype(np.int32)[0]), 3, (255,255,0), cv2.FILLED)
+
+		parent().store('3dCirclesFound', circles3D)
+		parent().store('2dCirclesFound', circles)
+
+
+		frame = cv2.bitwise_not(frame) #inverter
+		fileSave = 'circleGridFound.jpg'
+		cv2.imwrite(fileSave, frame)
+
+		# circle3d = parent().fetch('3dCirclesFound')
+
+		circle3Dat = op('geo_found_circle_grid/table_3d_circles')
+		circle3Dat.clear()
+
+		circle2Dat = op('geo_found_circle_grid/table_2d_circles')
+		circle2Dat.clear()
+
+		for rr in range(0, len(circles3D)):
+			circle3Dat.appendRow(circles3D[rr])
+		for rr in range(0, len(circles)):
+			circle2Dat.appendRow(circles[rr][0])
 
