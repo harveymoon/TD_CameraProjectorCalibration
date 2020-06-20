@@ -75,8 +75,7 @@ class StereoCalibrate:
 		self.dictionary = aruco.getPredefinedDictionary (aruco.DICT_4X4_50) #aruco.DICT_6X6_250) #
 		self.board = cv2.aruco.CharucoBoard_create(self.sqWidth,self.sqHeight,0.035,0.0175, self.dictionary)
 
-	def captureFrame(self):
-		print('capture frame')
+
 
 	def SaveBoard(self):
 		imboard = self.board.draw((2000, 1300))
@@ -103,7 +102,20 @@ class StereoCalibrate:
 		parent().store('charucoCornersAccum', [])
 		parent().store('charucoIdsAccum', [] )
 		parent().par.Capturedsets = 0
-		
+
+
+	def CaptureFrame(self):
+		print('capture frame')
+		cornerList = parent().fetch('charucoCornersAccum' , []) 
+		idList = parent().fetch('charucoIdsAccum' , [])
+		charucoCorners, charucoIds = parent().FindGrids()
+		cornerList += [charucoCorners]				
+		idList  += [charucoIds]
+		number_charuco_views = len(idList)
+		parent().par.Capturedsets = number_charuco_views
+		print(idList)
+
+				
 	def FindGrids(self):
 		print('Finding Grids')
 		frame = parent().GrabTop()
@@ -117,7 +129,7 @@ class StereoCalibrate:
 
 		corners, ids, rejectedImgPoints = aruco.detectMarkers (frame, self.dictionary)
 		aruco.drawDetectedMarkers (frame, corners, ids, (0, 255, 0))
-
+		
 		corners, ids, rejected, recovered = cv2.aruco.refineDetectedMarkers(frame, self.board, corners, ids, rejectedImgPoints)  #, cameraMatrix=K, distCoeffs=dist_coef)
 
 		#fileSave = project.folder+'/testOutput.jpg'
@@ -140,22 +152,86 @@ class StereoCalibrate:
 			ret, charucoCorners, charucoIds = cv2.aruco.interpolateCornersCharuco(corners, ids, frame, self.board)
 			if(len(charucoCorners) == 0):
 				print('NO CORNERS FOUND')
-			else:
-				print(ret)
+			else: # has found corners
 				for corner in charucoCorners:
 					cornerDat.appendRow(corner[0])
+				return charucoCorners, charucoIds, corners
 
-				cornerList = parent().fetch('charucoCornersAccum' , []) 
-				cornerList += [charucoCorners]
-				# parent().store('charucoCornersAccum', cornerList)
+			
 
-				idList = parent().fetch('charucoIdsAccum' , [])
-				idList  += [charucoIds]
-				# parent().store('charucoIdsAccum', idList )
+		
+	def FindPose(self):  # this function should find a pose from the current frame and the detected charuco patterns
+		print("Find Pose")
 
-				number_charuco_views = len(idList)
-				parent().par.Capturedsets = number_charuco_views
-				print(idList)
+		frame = parent().GrabTop()
+
+		charucoCorners ,charucoIds , feducialQuads= parent().FindGrids()
+		
+		camera_intrinsics = parent().fetch('camera_intrinsics')
+		for fed in feducialQuads:
+			rvec, tvec, objPoints =  aruco.estimatePoseSingleMarkers(fed, .008, camera_intrinsics['K'], camera_intrinsics['dist_coef'])
+			aruco.drawAxis(frame, camera_intrinsics['K'], camera_intrinsics['dist_coef'], rvec, tvec, 0.01)  # Draw axis
+		
+		fileSave = project.folder+'/poseDraw.jpg'
+		cv2.imwrite(fileSave, frame)
+
+		print('found all markers poses')
+		# print(rvec)
+
+
+		# if np.all(ids is not None):  # If there are markers found by detector
+  #           for i in range(0, len(ids)):  # Iterate in markers
+  #               # Estimate pose of each marker and return the values rvec and tvec---different from camera coefficients
+  #               rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners[i], 0.02, matrix_coefficients, distortion_coefficients)
+  #               aruco.drawAxis(frame, matrix_coefficients, distortion_coefficients, rvec, tvec, 0.01)  # Draw axis
+
+		# if found_pose:
+		# 	print('Calculated camera pose')
+
+		# 	last_pose = {
+		# 		'rvec': rvec,
+		# 		'tvec': tvec,
+		# 		'image_points': image_points,
+		# 		'object_points': object_points
+		# 	}
+		# 	self.Owner_comp.store('last_pose', last_pose)
+			
+		# 	self.Setup_matrices_for_pose(rvec, tvec, self.Owner_comp.fetch('camera_intrinsics')['mtx'], op.CameraCalibrated)
+
+		# 	# Now, try to find circle grid pattern
+		# 	self.Find_circles(img)
+
+		### Next camera pose estimation 
+		# Mat R;
+		# cv::Rodrigues(rvec, R); // calculate your object pose R matrix
+
+		# camR = R.t();  // calculate your camera R matrix
+
+		# Mat camRvec;
+		# Rodrigues(R, camRvec); // calculate your camera rvec
+
+		# Mat camTvec= -camR * tvec; // calculate your camera translation vector
+		###
+		# If with "world coordinates" you mean "object coordinates", you have to get the inverse transformation of the result given by the pnp algorithm.
+
+		# There is a trick to invert transformation matrices that allows you to save the inversion operation, which is usually expensive, and that explains the code in Python. Given a transformation [R|t], we have that inv([R|t]) = [R'|-R'*t], where R' is the transpose of R. So, you can code (not tested):
+
+		# cv::Mat rvec, tvec;
+		# solvePnP(..., rvec, tvec, ...);
+		# // rvec is 3x1, tvec is 3x1
+
+		# cv::Mat R;
+		# cv::Rodrigues(rvec, R); // R is 3x3
+
+		# R = R.t();  // rotation of inverse
+		# tvec = -R * tvec; // translation of inverse
+
+		# cv::Mat T = cv::Mat::eye(4, 4, R.type()); // T is 4x4
+		# T( cv::Range(0,3), cv::Range(0,3) ) = R * 1; // copies R into T
+		# T( cv::Range(0,3), cv::Range(3,4) ) = tvec * 1; // copies tvec into T
+
+		# // T is a 4x4 matrix with the pose of the camera in the object frame
+
 
 
 	def CalibrateCam(self):
@@ -166,19 +242,90 @@ class StereoCalibrate:
 
 		ret, K, dist_coef, rvecs, tvecs = cv2.aruco.calibrateCameraCharuco(cornerList, idList, self.board ,(self.CameraRes[0], self.CameraRes[1]),None, None) #K,dist_coef,flags = cv2.CALIB_USE_INTRINSIC_GUESS)
 		
-		parent().store('ret', ret)
-		parent().store('K', K)
-		parent().store('dist_coef', dist_coef)
-		parent().store('rvecs', rvecs)
-		parent().store('tvecs', tvecs)
+		# parent().store('ret', ret)
+		# parent().store('K', K)
+		# parent().store('dist_coef', dist_coef)
+		# parent().store('rvecs', rvecs)
+		# parent().store('tvecs', tvecs)
+
+		parent().store('camera_intrinsics', {	
+				'ret': ret,
+			   	'K': K,
+			   	'dist_coef': dist_coef,
+			   	'rvecs': rvecs,
+			   	'tvecs': tvecs
+			   })	
+
 	
 		print("camera calib mat after\n%s"%K)
 		print("camera dist_coef %s"%dist_coef.T)
 		print("calibration reproj err %s"%ret)
 		#op('text_circle_grid').run()
 
-	def FindPose(self):
-		print("Find Pose")
+
+
+
+
+	def Create_undistorted_uv_map(self):
+		'''Creates a UV map that can be used in combination with a remap TOP to 
+		undistort the video feed.
+
+		'''
+
+		# If the UV map template does not already exist, create it
+		# file_path = 'flat_map.exr'
+		# if not os.path.isfile(file_path):
+			# op('glsl_generate_uv_map').save(file_path)
+
+		# Here, -1 lets you import floating-point images
+		# cv_img = cv2.imread(file_path, -1) 
+
+		target_top = op('glsl_generate_uv_map')
+		input_w = target_top.width
+		input_h = target_top.height
+		# convert input frame to a numpy Array from 0-255
+		# pixels = target_top.numpyArray()[:,:,:3] * 255.0
+		pixels = target_top.numpyArray()[:,:,:3] 
+		# Convert the pixel data to a CV Mat object
+		# cv_img = pixels.astype(np.uint8)
+		cv_img = pixels
+		#need to flip y
+		# cv_img = cv2.flip(cv_img, 0)
+		#change to grayscape
+		# cv_gray = cv2.cvtColor(cv_img, cv2.COLOR_RGB2GRAY)
+		# cv_frame = cv_img.copy()
+
+
+		# Compute the optimal new camera matrix based on the free scaling parameter, alpha - 
+		# note that if alpha = 0, the image will be cropped
+		alpha = 0
+		h, w = cv_img.shape[:2]
+		camera_intrinsics = parent().fetch('camera_intrinsics')
+		undistorted_mtx, roi = cv2.getOptimalNewCameraMatrix(camera_intrinsics['K'], 
+														  	 camera_intrinsics['dist_coef'], 
+														  	 (w, h), alpha, (w, h))
+
+		# Compute the undistortion and rectification transformation map
+		mapx, mapy = cv2.initUndistortRectifyMap(camera_intrinsics['K'], 
+												 camera_intrinsics['dist_coef'], 
+												 None, undistorted_mtx, (w, h), 5)
+		
+		# Remap and (optionally) crop the image
+		dst = cv2.remap(cv_img, mapx, mapy, cv2.INTER_LINEAR)
+		x, y, w, h = roi
+		dst = dst[y:y+h, x:x+w]
+		
+		# Save out the file
+		save_path = 'undistortion_map.exr'
+		cv2.imwrite(save_path, dst)
+		
+		# Update storage 
+		camera_intrinsics['mtx_undistorted'] = undistorted_mtx
+		#camera_intrinsics['mapping_undistorted'] = { 'x': mapx, 'y': mapy }
+		#camera_intrinsics['uv_map_path_undistorted'] = save_path
+
+		# parent().store('camera_intrinsics', camera_intrinsics)
+
 
 
 	def FindCircleGrid(self):
@@ -226,8 +373,11 @@ class StereoCalibrate:
 		 
 		# re-project on camera for verification
 		circles3D_reprojected, _ = cv2.projectPoints(circles3D, (0,0,0), (0,0,0), K, dist_coef)
+		
+		
 		for c in circles3D_reprojected:
 		    cv2.circle(frame, tuple(c.astype(np.int32)[0]), 3, (255,255,0), cv2.FILLED)
+		    
 
 		parent().store('3dCirclesFound', circles3D)
 		parent().store('2dCirclesFound', circles)
@@ -247,6 +397,10 @@ class StereoCalibrate:
 
 		for rr in range(0, len(circles3D)):
 			circle3Dat.appendRow(circles3D[rr])
+			
+		for c in circles3D_reprojected:
+		    cv2.circle(frame, tuple(c.astype(np.int32)[0]), 3, (255,255,0), cv2.FILLED)
+		
 		for rr in range(0, len(circles)):
 			circle2Dat.appendRow(circles[rr][0])
 
