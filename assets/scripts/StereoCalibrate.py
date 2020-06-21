@@ -481,8 +481,8 @@ class StereoCalibrate:
 		camera_intrinsics = parent().fetch('camera_intrinsics')
 		K=camera_intrinsics['K']
 		dist_coef=camera_intrinsics['dist_coef']
-		rvecs=camera_intrinsics['rvecs']
-		tvecs=camera_intrinsics['tvecs']
+		# rvecs=camera_intrinsics['rvecs']
+		# tvecs=camera_intrinsics['tvecs']
 		 
 		print("stereo calibration")
 		ret, K, dist_coef, K_proj, dist_coef_proj, proj_R, proj_T, _, _ = cv2.stereoCalibrate(
@@ -506,6 +506,23 @@ class StereoCalibrate:
 		print("cam dist_coef %s"        %dist_coef.T)
 		print("reproj err %f"%ret)
 
+
+		parent().store('proj_intrinsics', {	
+		'ret': ret,
+		'K': K_proj,
+		'dist_coef': dist_coef_proj,
+		'rvecs': rvecs,
+		'tvecs': tvecs
+		})	
+
+		
+
+
+
+
+
+		####
+
 		matrix_comp = op('base_camera_matrix')
 
 
@@ -526,6 +543,26 @@ class StereoCalibrate:
 		fovx, fovy, focalLength, principalPoint, aspectRatio = cv2.calibrationMatrixValues(K_proj, size, 1920, 1080)
 		near = .1
 		far = 2000
+
+
+		####
+
+
+
+		INTRINSIC = op('INTRINSIC')
+		INTRINSIC.clear()
+		INTRINSIC.appendRow(['K', 'dist', 'fovx', 'fovy', 'focal', 'image_width', 'image_height'])
+		INTRINSIC.appendRow([
+			K_proj.tolist(),
+			dist_coef_proj.tolist(),
+			fovx,
+			fovy,
+			focalLength,
+			1920,
+			1080,
+		])
+
+
 
 		# Fill values table
 		cv_values = matrix_comp.op('cv_values')
