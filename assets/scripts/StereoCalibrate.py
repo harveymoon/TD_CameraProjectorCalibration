@@ -104,7 +104,7 @@ class StereoCalibrate:
 		print('capture frame')
 		cornerList = parent().fetch('charucoCornersAccum' , []) 
 		idList = parent().fetch('charucoIdsAccum' , [])
-		charucoCorners, charucoIds = parent().FindGrids()
+		charucoCorners, charucoIds, corners = parent().FindGrids()
 		cornerList += [charucoCorners]				
 		idList  += [charucoIds]
 		number_charuco_views = len(idList)
@@ -325,42 +325,66 @@ class StereoCalibrate:
 
 
 	def FindCircleGrid(self):
-		ret=parent().fetch('ret')
-		K=parent().fetch('K')
-		dist_coef=parent().fetch('dist_coef')
-		rvecs=parent().fetch('rvecs')
-		tvecs=parent().fetch('tvecs')
+		camera_intrinsics = parent().fetch('camera_intrinsics')
+
+		ret=camera_intrinsics['ret']
+		K=camera_intrinsics['K']
+		dist_coef=camera_intrinsics['dist_coef']
+		rvecs=camera_intrinsics['rvecs']
+		tvecs=camera_intrinsics['tvecs']
 
 		frame = parent().GrabTop()
-
 
 		circleGridScale = (self.circleWidth,self.circleHeight) 
 
 		frame = cv2.bitwise_not(frame) #invert the frame to see the dots
+		flags = cv2.CALIB_CB_SYMMETRIC_GRID
 		# --------- detect circles -----------
-		ret, circles = cv2.findCirclesGrid(frame, circleGridScale, flags=cv2.CALIB_CB_SYMMETRIC_GRID)
+		params = cv2.SimpleBlobDetector_Params()
+
+		params.filterByArea = True
+		params.maxArea = 10000
+		params.minArea = 200
+
+		params.minDistBetweenBlobs = 10
+		params.minThreshold = 10
+		params.maxThreshold = 220
+		params.thresholdStep = 5
+		
+		params.filterByCircularity = True
+		params.minCircularity = 0.8
+
+		params.filterByInertia = False
+		# params.minInertiaRatio = 0.01
+
+		params.filterByConvexity = False
+			# params.minConvexity = 0.5
+
+		detector = cv2.SimpleBlobDetector_create(params)
+
+		ret, circles = cv2.findCirclesGrid(frame, circleGridScale, flags=flags, blobDetector=detector)
 
 		print('ret : ')
 		print(ret)
+
+		if(ret == False):
+			print('NO CIRCLES FOUND, ABORT')
+			return
+
 		img = cv2.drawChessboardCorners(frame, circleGridScale, circles, ret)
 
-		#getMostRecent rvec 
+		#getMostRecent rvec  !!! Should use a new pose instead of this
 		rvec = rvecs[len(rvecs)-1]
 		tvec = tvecs[len(tvecs)-1]
 
-		print('circles found : ')
-		print(circles)
-
-		# print(type(circles))
-		# print(type(circles[0]))
-
+		# print('circles found : ')
+		# print(circles)
 
 		print('Matrix K : ')
 		print(K)
 
 		#print('dist_coef : ')
 		#print(dist_coef)
-
 
 		cv2.undistortPoints(circles, K, dist_coef)
 
@@ -374,9 +398,18 @@ class StereoCalibrate:
 		for c in circles3D_reprojected:
 		    cv2.circle(frame, tuple(c.astype(np.int32)[0]), 3, (255,255,0), cv2.FILLED)
 		    
+		# parent().store('3dCirclesFound', circles3D)
+		# parent().store('2dCirclesFound', circles)
 
-		parent().store('3dCirclesFound', circles3D)
-		parent().store('2dCirclesFound', circles)
+		circles3D = circles3D.astype('float32')
+		####
+		circle3DList = parent().fetch('3dCirclesFound' , []) 
+		circle2DList = parent().fetch('2dCirclesFound' , [])
+		circle3DList += [circles3D]				
+		circle2DList  += [circles]
+		number_circleGrid_views = len(circle2DList)
+		parent().par.Capturedcirclesets = number_circleGrid_views
+		###
 
 
 		frame = cv2.bitwise_not(frame) #inverter
@@ -400,3 +433,134 @@ class StereoCalibrate:
 		for rr in range(0, len(circles)):
 			circle2Dat.appendRow(circles[rr][0])
 
+
+	def CalibrateProjector(self):
+
+		print('projector calibration')
+
+		projRez = (1920,1080)
+
+		objectPointsAccum = parent().fetch('3dCirclesFound')
+
+		circleDat = op('null_circle_centers')
+
+		projCirclePoints = np.zeros((circleDat.numRows, 2), np.float32)
+	
+		for rr in range(0,circleDat.numRows):
+			projCirclePoints[rr] = ( float(circleDat[rr,0]), float(circleDat[rr,1]) ) 
+
+		projCirclePoints  = projCirclePoints.astype('float32')
+		# objectPointsAccum = objectPointsAccum.astype('float32')
+		objectPointsAccum =  np.asarray(objectPointsAccum, dtype=np.float32)
+		# print(objectPointsAccum)
+
+		print(len(objectPointsAccum))
+		# print(projCirclePoints)
+		projCirlcleList = []
+
+		for ix in range(0,len(objectPointsAccum)):
+			projCirlcleList.append(projCirclePoints)
+
+		# This can be omitted and can be substituted with None below.
+		K_proj = cv2.initCameraMatrix2D( objectPointsAccum,projCirlcleList , projRez)
+
+		#K_proj = None
+		dist_coef_proj = None
+
+		# the actual function that figures out the projectors projection matrix
+		ret, K_proj, dist_coef_proj, rvecs, tvecs = cv2.calibrateCamera(objectPointsAccum,
+		                                                                projCirlcleList,
+		                                                                projRez,
+		                                                                K_proj,
+		                                                                dist_coef_proj,flags = cv2.CALIB_USE_INTRINSIC_GUESS)
+		print("proj calib mat after\n%s"%K_proj)
+		print("proj dist_coef %s"%dist_coef_proj.T)
+		print("calibration reproj err %s"%ret)
+		
+		cameraCirclePoints = parent().fetch('2dCirclesFound')
+		camera_intrinsics = parent().fetch('camera_intrinsics')
+		K=camera_intrinsics['K']
+		dist_coef=camera_intrinsics['dist_coef']
+		rvecs=camera_intrinsics['rvecs']
+		tvecs=camera_intrinsics['tvecs']
+		 
+		print("stereo calibration")
+		ret, K, dist_coef, K_proj, dist_coef_proj, proj_R, proj_T, _, _ = cv2.stereoCalibrate(
+		        objectPointsAccum,
+		        cameraCirclePoints,
+		        projCirlcleList,
+		        K,
+		        dist_coef,
+		        K_proj,
+		        dist_coef_proj,
+		        projRez,
+		        flags = cv2.CALIB_USE_INTRINSIC_GUESS
+		        )
+		proj_rvec, _ = cv2.Rodrigues(proj_R)
+		 
+		print("R \n%s"%proj_R)
+		print("T %s"%proj_T.T)
+		print("proj calib mat after\n%s"%K_proj)
+		print("proj dist_coef %s"       %dist_coef_proj.T)
+		print("cam calib mat after\n%s" %K)
+		print("cam dist_coef %s"        %dist_coef.T)
+		print("reproj err %f"%ret)
+
+		matrix_comp = op('base_camera_matrix')
+
+
+		# Fill rotation table
+		cv_rotate_table = matrix_comp.op('cv_rotate')
+		for i, v in enumerate(proj_R):
+		        for j, rv in enumerate(v):
+		                cv_rotate_table[i, j] = rv
+
+		# Fill translate vector
+		cv_translate_table = matrix_comp.op('cv_translate')
+		for i, v in enumerate(proj_T.T):
+		        cv_translate_table[0, i] = v[0]
+
+		# Break appart camera matrix
+		size = projRez
+		# Computes useful camera characteristics from the camera matrix.
+		fovx, fovy, focalLength, principalPoint, aspectRatio = cv2.calibrationMatrixValues(K_proj, size, 1920, 1080)
+		near = .1
+		far = 2000
+
+		# Fill values table
+		cv_values = matrix_comp.op('cv_values')
+		cv_values['focalX',1] = focalLength
+		cv_values['focalY',1] = focalLength
+		cv_values['principalX',1] = principalPoint[0]
+		cv_values['principalY',1] = principalPoint[1]
+		cv_values['width',1] = 1920
+		cv_values['height',1] = 1080
+
+		l = near * (-principalPoint[0]) / focalLength
+		r = near * (1920 - principalPoint[0]) / focalLength
+		b = near * (principalPoint[1] - 1080) / focalLength
+		t = near * (principalPoint[1]) / focalLength
+
+		A = (r + l) / (r - l)
+		B = (t + b) / (t - b)
+		C = (far + near) / (near - far)
+		D = (2 * far * near) / (near - far)
+		nrl = (2 * near) / (r - l)
+		ntb = (2 * near) / (t - b)
+
+		table = matrix_comp.op('table_camera_matrices')
+
+		proj_mat = tdu.Matrix([nrl, 0, 0, 0], 
+		                                          [0, ntb, 0, 0], 
+		                                          [A, B, C, -1], 
+		                                          [0, 0, D, 0])
+
+		# Transformation matrix
+		tran_mat = tdu.Matrix([ proj_R[0][0],  proj_R[0][1],   proj_R[0][2],  proj_T[0]], 
+		                      [-proj_R[1][0], -proj_R[1][1],  -proj_R[1][2], -proj_T[1]],
+		                      [-proj_R[2][0], -proj_R[2][1],  -proj_R[2][2], -proj_T[2]],
+		                      [0,0,0,1])
+
+		matrix_comp.op('table_camera_matrices').clear()
+		matrix_comp.op('table_camera_matrices').appendRow(proj_mat) 
+		matrix_comp.op('table_camera_matrices').appendRow(tran_mat) 
