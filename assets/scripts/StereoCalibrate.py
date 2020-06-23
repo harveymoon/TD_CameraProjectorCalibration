@@ -109,7 +109,7 @@ class StereoCalibrate:
 		idList  += [charucoIds]
 		number_charuco_views = len(idList)
 		parent().par.Capturedsets = number_charuco_views
-		print(idList)
+		# print(idList)
 
 				
 	def FindGrids(self):
@@ -146,6 +146,7 @@ class StereoCalibrate:
 			print('no corners')
 		else:
 			ret, charucoCorners, charucoIds = cv2.aruco.interpolateCornersCharuco(corners, ids, frame, self.board)
+			print(ret)
 			if(len(charucoCorners) == 0):
 				print('NO CORNERS FOUND')
 			else: # has found corners
@@ -156,22 +157,75 @@ class StereoCalibrate:
 			
 
 		
-	def FindPose(self):  # this function should find a pose from the current frame and the detected charuco patterns
+	def FindPose(self, frame=None):  # this function should find a pose from the current frame and the detected charuco patterns
+		
+		# gridCorners, arucoIDs, arucoCorners = FindGrids()
+
 		print("Find Pose")
 
-		frame = parent().GrabTop()
+		if frame is None:
+			frame = parent().GrabTop()
 
 		charucoCorners ,charucoIds , feducialQuads= parent().FindGrids()
 		
 		camera_intrinsics = parent().fetch('camera_intrinsics')
-		for fed in feducialQuads:
-			rvec, tvec, objPoints =  aruco.estimatePoseSingleMarkers(fed, .008, camera_intrinsics['K'], camera_intrinsics['dist_coef'])
-			aruco.drawAxis(frame, camera_intrinsics['K'], camera_intrinsics['dist_coef'], rvec, tvec, 0.01)  # Draw axis
+		# for fed in feducialQuads:
+		# 	rvec, tvec, objPoints =  aruco.estimatePoseSingleMarkers(fed, .008, camera_intrinsics['K'], camera_intrinsics['dist_coef'])
+		# 	aruco.drawAxis(frame, camera_intrinsics['K'], camera_intrinsics['dist_coef'], rvec, tvec, 0.01)  # Draw axis
 		
-		fileSave = project.folder+'/poseDraw.jpg'
-		cv2.imwrite(fileSave, frame)
+		# fileSave = project.folder+'/poseDraw.jpg'
+		# cv2.imwrite(fileSave, frame)
 
-		print('found all markers poses')
+		# print('found all markers poses')
+		
+		 # # Find the rotation and translation vectors.
+   #      _,rvecs, tvecs, inliers = cv2.solvePnPRansac(objp, corners2, mtx, dist)
+   #      # project 3D points to image plane
+   #      imgpts, jac = cv2.projectPoints(axis, rvecs, tvecs, mtx, dist)
+
+   #      img = draw(img,corners2,imgpts)
+        
+
+        
+        
+		retval, Srvec, Stvec = aruco.estimatePoseBoard(charucoCorners, charucoIds, self.board, camera_intrinsics['K'], camera_intrinsics['dist_coef'], None, None)
+		Sdst, jacobian = cv2.Rodrigues(Srvec)
+		extristics = np.matrix([[Sdst[0][0],Sdst[0][1],Sdst[0][2],Stvec[0][0]],
+                             [Sdst[1][0],Sdst[1][1],Sdst[1][2],Stvec[1][0]],
+                             [Sdst[2][0],Sdst[2][1],Sdst[2][2],Stvec[2][0]],
+                             [0.0, 0.0, 0.0, 1.0]
+                ])
+		extristics_I = extristics.I  # inverse matrix
+		worldPos = [extristics_I[0,3],extristics_I[1,3],extristics_I[2,3]]
+
+		print(worldPos)
+
+
+
+		matrix_comp = op('base_camera_matrix')
+
+		# Fill rotation table
+		cv_rotate_table = matrix_comp.op('cv_rotate')
+		for i, v in enumerate(Srvec):
+		        for j, rv in enumerate(v):
+		                cv_rotate_table[i, j] = rv
+
+		# Fill translate vector
+		cv_translate_table = matrix_comp.op('cv_translate')
+		for i, v in enumerate(Stvec.T):
+		        cv_translate_table[0, i] = v[0]
+
+		projRez = (1920,1080)
+		# Break appart camera matrix
+		size = projRez
+		# Computes useful camera characteristics from the camera matrix.
+		fovx, fovy, focalLength, principalPoint, aspectRatio = cv2.calibrationMatrixValues(camera_intrinsics['K'], size, 1920, 1080)
+		near = .1
+		far = 2000
+
+
+		return worldPos, retval, Srvec, Stvec
+		
 		# print(rvec)
 
 
@@ -257,7 +311,6 @@ class StereoCalibrate:
 		print("camera dist_coef %s"%dist_coef.T)
 		print("calibration reproj err %s"%ret)
 		#op('text_circle_grid').run()
-
 
 
 
@@ -374,6 +427,8 @@ class StereoCalibrate:
 		img = cv2.drawChessboardCorners(frame, circleGridScale, circles, ret)
 
 		#getMostRecent rvec  !!! Should use a new pose instead of this
+		parent().FindPose(frame)
+
 		rvec = rvecs[len(rvecs)-1]
 		tvec = tvecs[len(tvecs)-1]
 
@@ -515,10 +570,17 @@ class StereoCalibrate:
 		'tvecs': tvecs
 		})	
 
-		
+		camera_intrinsics['K'] = K
+		camera_intrinsics['dist_coef'] = dist_coef
 
 
-
+		# parent().store('camera_intrinsics', {	
+		# 'ret': ret,
+	 #   	'K': K,
+	 #   	'dist_coef': dist_coef,
+	 #   	'rvecs': rvecs,
+	 #   	'tvecs': tvecs
+	 #   })	
 
 
 		####
