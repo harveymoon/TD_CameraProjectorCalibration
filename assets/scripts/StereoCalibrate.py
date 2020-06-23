@@ -48,7 +48,6 @@ def intersectCirclesRaysToBoard(circles, rvec, t, K, dist_coef):
  
     return circles_3d
 
-
 class StereoCalibrate:
 	"""
 	this process has three steps:
@@ -57,6 +56,10 @@ class StereoCalibrate:
 	3. Define the stereo calibration between the two lenses considering all of the known information.
 	"""
 	def __init__(self, ownerComp):
+
+		# self.CameraCalibrationError = -1
+		# self.ProjectorCalibrationError = -1
+
 		self.ownerComp = ownerComp
 		print('___Camera Projector Calibration INIT___')
 		
@@ -75,11 +78,17 @@ class StereoCalibrate:
 
 
 	def SaveBoard(self):
+		"""
+		This function will save a local jpg copy of the currently used Arcuo board. If you have not printed one out already, you will need to do so.
+		"""
 		imboard = self.board.draw((2000, 1300))
 		fileSave = 'CharucoBoard.jpg'
 		cv2.imwrite(fileSave, imboard)
 
 	def GrabTop(self):
+		"""
+		This function grabs a frame from a TOP Operator within the network and returns a grayscale CV Frame output. 
+		"""
 		target_top = self.inputTop
 		input_w = target_top.width
 		input_h = target_top.height
@@ -96,11 +105,17 @@ class StereoCalibrate:
 		return frame
 		
 	def ClearSets(self):
+		"""
+		This function will clear out the saved camera features
+		"""
 		parent().store('charucoCornersAccum', [])
 		parent().store('charucoIdsAccum', [] )
 		parent().par.Capturedsets = 0
 
 	def CaptureFrame(self):
+		"""
+		This function saves the current grid found into storage for calibration NOTE: maybe this should be renamed to 'StoreCorners'
+		"""
 		print('capture frame')
 		cornerList = parent().fetch('charucoCornersAccum' , []) 
 		idList = parent().fetch('charucoIdsAccum' , [])
@@ -112,9 +127,14 @@ class StereoCalibrate:
 		# print(idList)
 
 				
-	def FindGrids(self):
+	def FindGrids(self, frame = None):
+		"""
+		This function is will find grids in the input frame, it returns the arcuo shapes, id's found and the grid corners. 
+		"""
 		print('Finding Grids')
-		frame = parent().GrabTop()
+
+		if not frame:
+			frame = parent().GrabTop()
 		
 		idDat = op('base_aruco_view/table_ids')
 		idDat.clear(keepFirstRow = True)
@@ -157,8 +177,12 @@ class StereoCalibrate:
 			
 
 		
-	def FindPose(self, frame=None):  # this function should find a pose from the current frame and the detected charuco patterns
-		
+	def FindPose(self, frame=None):  
+		""" 
+		this function should find a pose from the current frame and the detected charuco patterns
+		returns :
+			worldPos, retval, Srvec, Stvec
+		"""
 		# gridCorners, arucoIDs, arucoCorners = FindGrids()
 
 		print("Find Pose")
@@ -178,16 +202,7 @@ class StereoCalibrate:
 
 		# print('found all markers poses')
 		
-		 # # Find the rotation and translation vectors.
-   #      _,rvecs, tvecs, inliers = cv2.solvePnPRansac(objp, corners2, mtx, dist)
-   #      # project 3D points to image plane
-   #      imgpts, jac = cv2.projectPoints(axis, rvecs, tvecs, mtx, dist)
 
-   #      img = draw(img,corners2,imgpts)
-        
-
-        
-        
 		retval, Srvec, Stvec = aruco.estimatePoseBoard(charucoCorners, charucoIds, self.board, camera_intrinsics['K'], camera_intrinsics['dist_coef'], None, None)
 		Sdst, jacobian = cv2.Rodrigues(Srvec)
 		extristics = np.matrix([[Sdst[0][0],Sdst[0][1],Sdst[0][2],Stvec[0][0]],
@@ -197,9 +212,6 @@ class StereoCalibrate:
                 ])
 		extristics_I = extristics.I  # inverse matrix
 		worldPos = [extristics_I[0,3],extristics_I[1,3],extristics_I[2,3]]
-
-		print(worldPos)
-
 
 
 		matrix_comp = op('base_camera_matrix')
@@ -219,84 +231,24 @@ class StereoCalibrate:
 		# Break appart camera matrix
 		size = projRez
 		# Computes useful camera characteristics from the camera matrix.
-		fovx, fovy, focalLength, principalPoint, aspectRatio = cv2.calibrationMatrixValues(camera_intrinsics['K'], size, 1920, 1080)
+		fovx, fovy, focalLength, principalPoint, aspectRatio = cv2.calibrationMatrixValues(camera_intrinsics['K'], size, 1920, 1080)  # this is not right, last two arguments are supposed to be the aperature size in mm
 		near = .1
 		far = 2000
 
-
 		return worldPos, retval, Srvec, Stvec
-		
-		# print(rvec)
-
-
-		# if np.all(ids is not None):  # If there are markers found by detector
-  #           for i in range(0, len(ids)):  # Iterate in markers
-  #               # Estimate pose of each marker and return the values rvec and tvec---different from camera coefficients
-  #               rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners[i], 0.02, matrix_coefficients, distortion_coefficients)
-  #               aruco.drawAxis(frame, matrix_coefficients, distortion_coefficients, rvec, tvec, 0.01)  # Draw axis
-
-		# if found_pose:
-		# 	print('Calculated camera pose')
-
-		# 	last_pose = {
-		# 		'rvec': rvec,
-		# 		'tvec': tvec,
-		# 		'image_points': image_points,
-		# 		'object_points': object_points
-		# 	}
-		# 	self.Owner_comp.store('last_pose', last_pose)
-			
-		# 	self.Setup_matrices_for_pose(rvec, tvec, self.Owner_comp.fetch('camera_intrinsics')['mtx'], op.CameraCalibrated)
-
-		# 	# Now, try to find circle grid pattern
-		# 	self.Find_circles(img)
-
-		### Next camera pose estimation 
-		# Mat R;
-		# cv::Rodrigues(rvec, R); // calculate your object pose R matrix
-
-		# camR = R.t();  // calculate your camera R matrix
-
-		# Mat camRvec;
-		# Rodrigues(R, camRvec); // calculate your camera rvec
-
-		# Mat camTvec= -camR * tvec; // calculate your camera translation vector
-		###
-		# If with "world coordinates" you mean "object coordinates", you have to get the inverse transformation of the result given by the pnp algorithm.
-
-		# There is a trick to invert transformation matrices that allows you to save the inversion operation, which is usually expensive, and that explains the code in Python. Given a transformation [R|t], we have that inv([R|t]) = [R'|-R'*t], where R' is the transpose of R. So, you can code (not tested):
-
-		# cv::Mat rvec, tvec;
-		# solvePnP(..., rvec, tvec, ...);
-		# // rvec is 3x1, tvec is 3x1
-
-		# cv::Mat R;
-		# cv::Rodrigues(rvec, R); // R is 3x3
-
-		# R = R.t();  // rotation of inverse
-		# tvec = -R * tvec; // translation of inverse
-
-		# cv::Mat T = cv::Mat::eye(4, 4, R.type()); // T is 4x4
-		# T( cv::Range(0,3), cv::Range(0,3) ) = R * 1; // copies R into T
-		# T( cv::Range(0,3), cv::Range(3,4) ) = tvec * 1; // copies tvec into T
-
-		# // T is a 4x4 matrix with the pose of the camera in the object frame
-
 
 
 	def CalibrateCam(self):
+		"""
+		This function will take the saved camera checkerboard information and calculate an intrincis matrix for the camera and lens pair. 
+		"""
+
 		print('Calibrate Camera')
 
 		cornerList = parent().fetch('charucoCornersAccum' , []) 
 		idList = parent().fetch('charucoIdsAccum' , [])
 
 		ret, K, dist_coef, rvecs, tvecs = cv2.aruco.calibrateCameraCharuco(cornerList, idList, self.board ,(self.CameraRes[0], self.CameraRes[1]),None, None) #K,dist_coef,flags = cv2.CALIB_USE_INTRINSIC_GUESS)
-		
-		# parent().store('ret', ret)
-		# parent().store('K', K)
-		# parent().store('dist_coef', dist_coef)
-		# parent().store('rvecs', rvecs)
-		# parent().store('tvecs', tvecs)
 
 		parent().store('camera_intrinsics', {	
 				'ret': ret,
@@ -314,10 +266,9 @@ class StereoCalibrate:
 
 
 
-
 	def Create_undistorted_uv_map(self):
 		'''Creates a UV map that can be used in combination with a remap TOP to 
-		undistort the video feed.
+		undistort the video feed later on.
 
 		'''
 
@@ -378,19 +329,23 @@ class StereoCalibrate:
 
 
 	def FindCircleGrid(self):
+
+		"""
+		This function will discover the circle grids in camera space and then re-project the found locations back into 3d space using the calibrated camera. 
+		"""
+
 		camera_intrinsics = parent().fetch('camera_intrinsics')
 
 		ret=camera_intrinsics['ret']
 		K=camera_intrinsics['K']
 		dist_coef=camera_intrinsics['dist_coef']
-		rvecs=camera_intrinsics['rvecs']
-		tvecs=camera_intrinsics['tvecs']
+
 
 		frame = parent().GrabTop()
 
 		circleGridScale = (self.circleWidth,self.circleHeight) 
 
-		frame = cv2.bitwise_not(frame) #invert the frame to see the dots
+		frame = cv2.bitwise_not(frame) #invert the frame to see the dots, NOTE: do I really need to do this?
 		flags = cv2.CALIB_CB_SYMMETRIC_GRID
 		# --------- detect circles -----------
 		params = cv2.SimpleBlobDetector_Params()
@@ -426,20 +381,14 @@ class StereoCalibrate:
 
 		img = cv2.drawChessboardCorners(frame, circleGridScale, circles, ret)
 
-		#getMostRecent rvec  !!! Should use a new pose instead of this
-		parent().FindPose(frame)
+		worldPos, retval, Rrvec, Rtvec = parent().FindPose(frame)
 
-		rvec = rvecs[len(rvecs)-1]
-		tvec = tvecs[len(tvecs)-1]
+		rvec = Rrvec
+		tvec = Rtvec
 
-		# print('circles found : ')
-		# print(circles)
 
 		print('Matrix K : ')
 		print(K)
-
-		#print('dist_coef : ')
-		#print(dist_coef)
 
 		cv2.undistortPoints(circles, K, dist_coef)
 
@@ -449,12 +398,9 @@ class StereoCalibrate:
 		# re-project on camera for verification
 		circles3D_reprojected, _ = cv2.projectPoints(circles3D, (0,0,0), (0,0,0), K, dist_coef)
 		
-		
 		for c in circles3D_reprojected:
 		    cv2.circle(frame, tuple(c.astype(np.int32)[0]), 3, (255,255,0), cv2.FILLED)
 		    
-		# parent().store('3dCirclesFound', circles3D)
-		# parent().store('2dCirclesFound', circles)
 
 		circles3D = circles3D.astype('float32')
 		####
@@ -467,11 +413,10 @@ class StereoCalibrate:
 		###
 
 
-		frame = cv2.bitwise_not(frame) #inverter
+		frame = cv2.bitwise_not(frame) #inverter because we inverted before, NOTE: is this necessary?
 		fileSave = 'circleGridFound.jpg'
 		cv2.imwrite(fileSave, frame)
 
-		# circle3d = parent().fetch('3dCirclesFound')
 
 		circle3Dat = op('geo_found_circle_grid/table_3d_circles')
 		circle3Dat.clear()
@@ -482,14 +427,18 @@ class StereoCalibrate:
 		for rr in range(0, len(circles3D)):
 			circle3Dat.appendRow(circles3D[rr])
 			
-		for c in circles3D_reprojected:
-		    cv2.circle(frame, tuple(c.astype(np.int32)[0]), 3, (255,255,0), cv2.FILLED)
+		# for c in circles3D_reprojected:
+		#     cv2.circle(frame, tuple(c.astype(np.int32)[0]), 3, (255,255,0), cv2.FILLED)
 		
 		for rr in range(0, len(circles)):
 			circle2Dat.appendRow(circles[rr][0])
 
 
 	def CalibrateProjector(self):
+
+		"""
+		this function should calibrate the projector given the known points based on the cameras calibration. Then it does a stereo calibration between the camera and the projector together. 
+		"""
 
 		print('projector calibration')
 
@@ -522,12 +471,27 @@ class StereoCalibrate:
 		#K_proj = None
 		dist_coef_proj = None
 
+	    flags = 0
+	    #flags |= cv2.CALIB_FIX_INTRINSIC
+	    flags |= cv2.CALIB_USE_INTRINSIC_GUESS
+	    #flags |= cv2.CALIB_FIX_PRINCIPAL_POINT
+	    #flags |= cv2.CALIB_FIX_FOCAL_LENGTH
+	    # flags |= cv2.CALIB_FIX_ASPECT_RATIO
+	    # flags |= cv2.CALIB_ZERO_TANGENT_DIST
+	    # flags |= cv2.CALIB_SAME_FOCAL_LENGTH
+	    # flags |= cv2.CALIB_RATIONAL_MODEL
+	    # flags |= cv2.CALIB_FIX_K3
+	    # flags |= cv2.CALIB_FIX_K4
+	    # flags |= cv2.CALIB_FIX_K5
+
+
+
 		# the actual function that figures out the projectors projection matrix
 		ret, K_proj, dist_coef_proj, rvecs, tvecs = cv2.calibrateCamera(objectPointsAccum,
 		                                                                projCirlcleList,
 		                                                                projRez,
 		                                                                K_proj,
-		                                                                dist_coef_proj,flags = cv2.CALIB_USE_INTRINSIC_GUESS)
+		                                                                dist_coef_proj,flags = flags)
 		print("proj calib mat after\n%s"%K_proj)
 		print("proj dist_coef %s"%dist_coef_proj.T)
 		print("calibration reproj err %s"%ret)
@@ -573,17 +537,7 @@ class StereoCalibrate:
 		camera_intrinsics['K'] = K
 		camera_intrinsics['dist_coef'] = dist_coef
 
-
-		# parent().store('camera_intrinsics', {	
-		# 'ret': ret,
-	 #   	'K': K,
-	 #   	'dist_coef': dist_coef,
-	 #   	'rvecs': rvecs,
-	 #   	'tvecs': tvecs
-	 #   })	
-
-
-		####
+		####  below are two tests to try and get pose information back into touchdesigner camera components
 
 		matrix_comp = op('base_camera_matrix')
 
@@ -608,8 +562,6 @@ class StereoCalibrate:
 
 
 		####
-
-
 
 		INTRINSIC = op('INTRINSIC')
 		INTRINSIC.clear()
