@@ -240,14 +240,26 @@ class StereoCalibrate:
 		# Convert `rvec` (which is a rotation specified by an axis+angle, used by OpenCV internally)
 		# into a 3x3 rotation matrix
 		rotation_matrix = np.eye(3)
-		cv.Rodrigues2(rvec, rotation_matrix)
+		cv2.Rodrigues(Srvec, rotation_matrix)
 		# ----------- ^src  ^dst          
 		# Rotate the extrinsic matrix - NOTE you're going to have to do some stuff here to convert
 		# the 3x3 numpy array (`rotation_matrix`) into a tdu.Matrix first
-		extrinsic = rotation_matrix * extrinsic
-		# Translate the extrinsic matrix by `tvec`
-		extrinsic.translate(tvec[0], tvec[1], tvec[2])
+		print(rotation_matrix)
+		print(rotation_matrix.flatten().tolist())
 
+
+		rotMatrix = tdu.Matrix(rotation_matrix.flatten().tolist())
+		# extMatrix = tdu.Matrix(extrinsic_matrix.flatten().tolist())
+
+		extrinsic = rotMatrix * extrinsic_matrix
+		# Translate the extrinsic matrix by `tvec`
+		extrinsic.translate(Stvec[0], Stvec[1], Stvec[2])
+
+		extrinsic.fillTable(op('table_cam_pose_ext'))
+
+
+		camInternal = tdu.Matrix(camera_intrinsics['K'].flatten().tolist())
+		camInternal.fillTable(op('table_cam_int'))
 
 		return worldPos, retval, Srvec, Stvec
 
