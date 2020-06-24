@@ -17,36 +17,36 @@ aruco = cv2.aruco  # make sure you include the required contributed libraries fo
 
 ## local helper function for projecting the 2d dots onto the grid's plane
 def intersectCirclesRaysToBoard(circles, rvec, t, K, dist_coef):
-    circles_normalized = cv2.convertPointsToHomogeneous(cv2.undistortPoints(circles, K, dist_coef))
-    if not rvec.size:
-        return None
-    R, _ = cv2.Rodrigues(rvec)
+	circles_normalized = cv2.convertPointsToHomogeneous(cv2.undistortPoints(circles, K, dist_coef))
+	if not rvec.size:
+		return None
+	R, _ = cv2.Rodrigues(rvec)
  
-    # https://stackoverflow.com/questions/5666222/3d-line-plane-intersection
+	# https://stackoverflow.com/questions/5666222/3d-line-plane-intersection
  
-    plane_normal = R[2,:] # last row of plane rotation matrix is normal to plane
-    plane_point = t.T     # t is a point on the plane
+	plane_normal = R[2,:] # last row of plane rotation matrix is normal to plane
+	plane_point = t.T     # t is a point on the plane
  
-    epsilon = 1e-06
+	epsilon = 1e-06
  
-    circles_3d = np.zeros((0,3), dtype=np.float32)
+	circles_3d = np.zeros((0,3), dtype=np.float32)
  
-    for p in circles_normalized:
-        ray_direction = p / np.linalg.norm(p)
-        ray_point = p
+	for p in circles_normalized:
+		ray_direction = p / np.linalg.norm(p)
+		ray_point = p
  
-        ndotu = plane_normal.dot(ray_direction.T)
+		ndotu = plane_normal.dot(ray_direction.T)
  
-        if abs(ndotu) < epsilon:
-            print ("no intersection or line is within plane")
+		if abs(ndotu) < epsilon:
+			print ("no intersection or line is within plane")
  
-        w = ray_point - plane_point
-        si = -plane_normal.dot(w.T) / ndotu
-        Psi = w + si * ray_direction + plane_point
+		w = ray_point - plane_point
+		si = -plane_normal.dot(w.T) / ndotu
+		Psi = w + si * ray_direction + plane_point
  
-        circles_3d = np.append(circles_3d, Psi, axis = 0)
+		circles_3d = np.append(circles_3d, Psi, axis = 0)
  
-    return circles_3d
+	return circles_3d
 
 class StereoCalibrate:
 	"""
@@ -85,6 +85,7 @@ class StereoCalibrate:
 		fileSave = 'CharucoBoard.jpg'
 		cv2.imwrite(fileSave, imboard)
 
+
 	def GrabTop(self):
 		"""
 		This function grabs a frame from a TOP Operator within the network and returns a grayscale CV Frame output. 
@@ -104,6 +105,7 @@ class StereoCalibrate:
 		self.CameraRes = frame.shape[:2]
 		return frame
 		
+
 	def ClearSets(self):
 		"""
 		This function will clear out the saved camera features
@@ -111,6 +113,7 @@ class StereoCalibrate:
 		parent().store('charucoCornersAccum', [])
 		parent().store('charucoIdsAccum', [] )
 		parent().par.Capturedsets = 0
+
 
 	def CaptureFrame(self):
 		"""
@@ -126,7 +129,6 @@ class StereoCalibrate:
 		parent().par.Capturedsets = number_charuco_views
 		# print(idList)
 
-				
 	def FindGrids(self, frame = None):
 		"""
 		This function is will find grids in the input frame, it returns the arcuo shapes, id's found and the grid corners. 
@@ -174,9 +176,6 @@ class StereoCalibrate:
 					cornerDat.appendRow(corner[0])
 				return charucoCorners, charucoIds, corners
 
-			
-
-		
 	def FindPose(self, frame=None):  
 		""" 
 		this function should find a pose from the current frame and the detected charuco patterns
@@ -206,10 +205,10 @@ class StereoCalibrate:
 		retval, Srvec, Stvec = aruco.estimatePoseBoard(charucoCorners, charucoIds, self.board, camera_intrinsics['K'], camera_intrinsics['dist_coef'], None, None)
 		Sdst, jacobian = cv2.Rodrigues(Srvec)
 		extristics = np.matrix([[Sdst[0][0],Sdst[0][1],Sdst[0][2],Stvec[0][0]],
-                             [Sdst[1][0],Sdst[1][1],Sdst[1][2],Stvec[1][0]],
-                             [Sdst[2][0],Sdst[2][1],Sdst[2][2],Stvec[2][0]],
-                             [0.0, 0.0, 0.0, 1.0]
-                ])
+							 [Sdst[1][0],Sdst[1][1],Sdst[1][2],Stvec[1][0]],
+							 [Sdst[2][0],Sdst[2][1],Sdst[2][2],Stvec[2][0]],
+							 [0.0, 0.0, 0.0, 1.0]
+				])
 		extristics_I = extristics.I  # inverse matrix
 		worldPos = [extristics_I[0,3],extristics_I[1,3],extristics_I[2,3]]
 
@@ -219,13 +218,13 @@ class StereoCalibrate:
 		# Fill rotation table
 		cv_rotate_table = matrix_comp.op('cv_rotate')
 		for i, v in enumerate(Srvec):
-		        for j, rv in enumerate(v):
-		                cv_rotate_table[i, j] = rv
+				for j, rv in enumerate(v):
+						cv_rotate_table[i, j] = rv
 
 		# Fill translate vector
 		cv_translate_table = matrix_comp.op('cv_translate')
 		for i, v in enumerate(Stvec.T):
-		        cv_translate_table[0, i] = v[0]
+				cv_translate_table[0, i] = v[0]
 
 		projRez = (1920,1080)
 		# Break appart camera matrix
@@ -234,6 +233,21 @@ class StereoCalibrate:
 		fovx, fovy, focalLength, principalPoint, aspectRatio = cv2.calibrationMatrixValues(camera_intrinsics['K'], size, 1920, 1080)  # this is not right, last two arguments are supposed to be the aperature size in mm
 		near = .1
 		far = 2000
+
+		# Create a new identity matrix
+		extrinsic_matrix = tdu.Matrix()
+		extrinsic_matrix.identity()
+		# Convert `rvec` (which is a rotation specified by an axis+angle, used by OpenCV internally)
+		# into a 3x3 rotation matrix
+		rotation_matrix = np.eye(3)
+		cv.Rodrigues2(rvec, rotation_matrix)
+		# ----------- ^src  ^dst          
+		# Rotate the extrinsic matrix - NOTE you're going to have to do some stuff here to convert
+		# the 3x3 numpy array (`rotation_matrix`) into a tdu.Matrix first
+		extrinsic = rotation_matrix * extrinsic
+		# Translate the extrinsic matrix by `tvec`
+		extrinsic.translate(tvec[0], tvec[1], tvec[2])
+
 
 		return worldPos, retval, Srvec, Stvec
 
@@ -252,10 +266,10 @@ class StereoCalibrate:
 
 		parent().store('camera_intrinsics', {	
 				'ret': ret,
-			   	'K': K,
-			   	'dist_coef': dist_coef,
-			   	'rvecs': rvecs,
-			   	'tvecs': tvecs
+				'K': K,
+				'dist_coef': dist_coef,
+				'rvecs': rvecs,
+				'tvecs': tvecs
 			   })	
 
 	
@@ -302,8 +316,8 @@ class StereoCalibrate:
 		h, w = cv_img.shape[:2]
 		camera_intrinsics = parent().fetch('camera_intrinsics')
 		undistorted_mtx, roi = cv2.getOptimalNewCameraMatrix(camera_intrinsics['K'], 
-														  	 camera_intrinsics['dist_coef'], 
-														  	 (w, h), alpha, (w, h))
+															 camera_intrinsics['dist_coef'], 
+															 (w, h), alpha, (w, h))
 
 		# Compute the undistortion and rectification transformation map
 		mapx, mapy = cv2.initUndistortRectifyMap(camera_intrinsics['K'], 
@@ -399,8 +413,8 @@ class StereoCalibrate:
 		circles3D_reprojected, _ = cv2.projectPoints(circles3D, (0,0,0), (0,0,0), K, dist_coef)
 		
 		for c in circles3D_reprojected:
-		    cv2.circle(frame, tuple(c.astype(np.int32)[0]), 3, (255,255,0), cv2.FILLED)
-		    
+			cv2.circle(frame, tuple(c.astype(np.int32)[0]), 3, (255,255,0), cv2.FILLED)
+			
 
 		circles3D = circles3D.astype('float32')
 		####
@@ -471,27 +485,27 @@ class StereoCalibrate:
 		#K_proj = None
 		dist_coef_proj = None
 
-	    flags = 0
-	    #flags |= cv2.CALIB_FIX_INTRINSIC
-	    flags |= cv2.CALIB_USE_INTRINSIC_GUESS
-	    #flags |= cv2.CALIB_FIX_PRINCIPAL_POINT
-	    #flags |= cv2.CALIB_FIX_FOCAL_LENGTH
-	    # flags |= cv2.CALIB_FIX_ASPECT_RATIO
-	    # flags |= cv2.CALIB_ZERO_TANGENT_DIST
-	    # flags |= cv2.CALIB_SAME_FOCAL_LENGTH
-	    # flags |= cv2.CALIB_RATIONAL_MODEL
-	    # flags |= cv2.CALIB_FIX_K3
-	    # flags |= cv2.CALIB_FIX_K4
-	    # flags |= cv2.CALIB_FIX_K5
+		flags = 0
+		#flags |= cv2.CALIB_FIX_INTRINSIC
+		flags |= cv2.CALIB_USE_INTRINSIC_GUESS
+		#flags |= cv2.CALIB_FIX_PRINCIPAL_POINT
+		#flags |= cv2.CALIB_FIX_FOCAL_LENGTH
+		# flags |= cv2.CALIB_FIX_ASPECT_RATIO
+		# flags |= cv2.CALIB_ZERO_TANGENT_DIST
+		# flags |= cv2.CALIB_SAME_FOCAL_LENGTH
+		# flags |= cv2.CALIB_RATIONAL_MODEL
+		# flags |= cv2.CALIB_FIX_K3
+		# flags |= cv2.CALIB_FIX_K4
+		# flags |= cv2.CALIB_FIX_K5
 
 
 
 		# the actual function that figures out the projectors projection matrix
 		ret, K_proj, dist_coef_proj, rvecs, tvecs = cv2.calibrateCamera(objectPointsAccum,
-		                                                                projCirlcleList,
-		                                                                projRez,
-		                                                                K_proj,
-		                                                                dist_coef_proj,flags = flags)
+																		projCirlcleList,
+																		projRez,
+																		K_proj,
+																		dist_coef_proj,flags = flags)
 		print("proj calib mat after\n%s"%K_proj)
 		print("proj dist_coef %s"%dist_coef_proj.T)
 		print("calibration reproj err %s"%ret)
@@ -505,16 +519,16 @@ class StereoCalibrate:
 		 
 		print("stereo calibration")
 		ret, K, dist_coef, K_proj, dist_coef_proj, proj_R, proj_T, _, _ = cv2.stereoCalibrate(
-		        objectPointsAccum,
-		        cameraCirclePoints,
-		        projCirlcleList,
-		        K,
-		        dist_coef,
-		        K_proj,
-		        dist_coef_proj,
-		        projRez,
-		        flags = cv2.CALIB_USE_INTRINSIC_GUESS
-		        )
+				objectPointsAccum,
+				cameraCirclePoints,
+				projCirlcleList,
+				K,
+				dist_coef,
+				K_proj,
+				dist_coef_proj,
+				projRez,
+				flags = cv2.CALIB_USE_INTRINSIC_GUESS
+				)
 		proj_rvec, _ = cv2.Rodrigues(proj_R)
 		 
 		print("R \n%s"%proj_R)
@@ -545,13 +559,13 @@ class StereoCalibrate:
 		# Fill rotation table
 		cv_rotate_table = matrix_comp.op('cv_rotate')
 		for i, v in enumerate(proj_R):
-		        for j, rv in enumerate(v):
-		                cv_rotate_table[i, j] = rv
+				for j, rv in enumerate(v):
+						cv_rotate_table[i, j] = rv
 
 		# Fill translate vector
 		cv_translate_table = matrix_comp.op('cv_translate')
 		for i, v in enumerate(proj_T.T):
-		        cv_translate_table[0, i] = v[0]
+				cv_translate_table[0, i] = v[0]
 
 		# Break appart camera matrix
 		size = projRez
@@ -602,15 +616,15 @@ class StereoCalibrate:
 		table = matrix_comp.op('table_camera_matrices')
 
 		proj_mat = tdu.Matrix([nrl, 0, 0, 0], 
-		                                          [0, ntb, 0, 0], 
-		                                          [A, B, C, -1], 
-		                                          [0, 0, D, 0])
+												  [0, ntb, 0, 0], 
+												  [A, B, C, -1], 
+												  [0, 0, D, 0])
 
 		# Transformation matrix
 		tran_mat = tdu.Matrix([ proj_R[0][0],  proj_R[0][1],   proj_R[0][2],  proj_T[0]], 
-		                      [-proj_R[1][0], -proj_R[1][1],  -proj_R[1][2], -proj_T[1]],
-		                      [-proj_R[2][0], -proj_R[2][1],  -proj_R[2][2], -proj_T[2]],
-		                      [0,0,0,1])
+							  [-proj_R[1][0], -proj_R[1][1],  -proj_R[1][2], -proj_T[1]],
+							  [-proj_R[2][0], -proj_R[2][1],  -proj_R[2][2], -proj_T[2]],
+							  [0,0,0,1])
 
 		matrix_comp.op('table_camera_matrices').clear()
 		matrix_comp.op('table_camera_matrices').appendRow(proj_mat) 
