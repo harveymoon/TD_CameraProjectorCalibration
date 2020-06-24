@@ -25,5 +25,10 @@ collect a number of circle grid sets before attempting to calibrate.
 
 This step runs right after projector calibration, it will use all of the collected point data and recalibrate the stereo connection between the camera and the projector.
 
+# References
+
+1. [Converting Between OpenCV and OpenGL Projection Matrices](https://strawlab.org/2011/11/05/augmented-reality-with-OpenGL/)
+2. [Finding the Camera Pose Relative to the Chessboard](https://stackoverflow.com/questions/52833322/using-aruco-to-estimate-the-world-position-of-camera)
+
 
 ---
