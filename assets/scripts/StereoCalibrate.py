@@ -179,7 +179,7 @@ class StereoCalibrate:
 		ids_list = parent().fetch('charucoIdsAccum', [])
 
 		# Find the aruco corners (markers and chessboard)
-		corners, ids, chessboard_corners, chessboard_ids = parent().FindGrids()
+		corners, ids, chessboard_corners, chessboard_ids, frame = parent().FindGrids()
 		
 		# Accumulate
 		corners_list += [chessboard_corners]				
@@ -205,9 +205,9 @@ class StereoCalibrate:
 
 		"""
 		print('Finding charuco board...')
-
+	
 		# If a frame was not supplied, grab one from the TOP 
-		if frame is not None:
+		if frame is None:
 			frame = parent().GrabTop()
 		
 		DAT_ids = op('base_aruco_view/table_ids')
