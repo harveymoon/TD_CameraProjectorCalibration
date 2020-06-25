@@ -164,6 +164,8 @@ class StereoCalibrate:
 		parent().store('charucoCornersAccum', [])
 		parent().store('charucoIdsAccum', [] )
 		parent().par.Capturedsets = 0
+		parent().par.Calibratecam.enable = False
+		parent().par.Findpose.enable = False
 
 	def CaptureFrame(self):
 		"""
@@ -188,6 +190,10 @@ class StereoCalibrate:
 		# Set the custom par that shows the user how many views have been captured
 		number_charuco_views = len(ids_list)
 		parent().par.Capturedsets = number_charuco_views
+
+		if(number_charuco_views >= 8):
+			parent().par.Calibratecam.enable = True
+			parent().par.Findpose.enable = False
 
 	def FindGrids(self, frame=None):
 		"""
@@ -317,6 +323,9 @@ class StereoCalibrate:
 		print('\tCamera calibration matrix:\n', K)
 		print('\tCamera distortion coefficients:\n', dist_coeff.T)
 		print('\tReprojection error:', ret)
+
+		parent().par.Calibratecam.enable = True
+		parent().par.Findpose.enable = True
 
 	def Create_undistorted_uv_map(self):
 		'''Creates a UV map that can be used in combination with a remap TOP to 
