@@ -1,2 +1,5 @@
 python/*
 Backup/*
+
+*.npy
+*.exr
